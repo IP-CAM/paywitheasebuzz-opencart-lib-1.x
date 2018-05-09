@@ -55,7 +55,6 @@ class ControllerPaymentEasebuzz extends Controller
         }
     }
     public function callback() {
-        
         $data = array_merge($this->request->post, $this->request->get);
         try {
             if (empty($data)) {
@@ -67,19 +66,29 @@ class ControllerPaymentEasebuzz extends Controller
             } else {
                 die('Illegal Access');
             }
-
+            require_once(DIR_SYSTEM . 'helper/easebuzz-lib.php');
+            $SALT=trim($this->config->get('easebuzz_merchant_salt')); 
+            $result = response( $data, $SALT );
             $this->load->model('checkout/order');
             $order_info = $this->model_checkout_order->getOrder($order_id);
-            if ($order_info) {
-                if($data["status"]=="success"){
-                    $this->model_checkout_order->confirm($order_info['order_id'], $this->config->get('easebuzz_complete_status'));
-                    $this->redirect($this->url->link('checkout/success', '', true));
-                }else{   
-                    $this->model_checkout_order->confirm($order_info['order_id'], $this->config->get('easebuzz_cancelled_status'));
-                    $this->session->data['error'] = "Payment failed";
-                    $this->redirect($this->url->link('checkout/checkout', '', true));
+            if($result['status']==1){
+                if ($order_info) {
+                    if($data["status"]=="success"){
+                        $this->model_checkout_order->confirm($order_info['order_id'], $this->config->get('easebuzz_complete_status'));
+                        $this->redirect($this->url->link('checkout/success', '', true));
+                    }else{   
+                        $this->model_checkout_order->confirm($order_info['order_id'], $this->config->get('easebuzz_cancelled_status'));
+                        $this->session->data['error'] = "Payment failed";
+                        $this->redirect($this->url->link('checkout/checkout', '', true));
+                    }
                 }
             }
+            else{
+                $this->model_checkout_order->confirm($order_info['order_id'], $this->config->get('easebuzz_cancelled_status'));
+                $this->session->data['error'] = "Hash mismatch, Please try again.";
+                $this->redirect($this->url->link('checkout/checkout', '', true));
+            }
+            
         }catch (Exception $e) {
             $this->logger->write('OCR Notification: ' . $e->getMessage());
         }
